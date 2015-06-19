@@ -49,8 +49,8 @@ class CassandraRDD(RDD):
 		
 		if not table:
 			raise ValueError("table not set")
-		
-		if not row_format:
+
+		if row_format is None:
 			row_format = RowFormat.ROW
 		elif row_format < 0 or row_format >= len(RowFormat.values):
 			raise ValueError("invalid row_format %s" % row_format)
