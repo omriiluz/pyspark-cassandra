@@ -20,6 +20,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import scala.Option;
+import scala.Tuple2;
 
 import pyspark_cassandra.pickling.BatchPickle;
 import pyspark_cassandra.pickling.BatchUnpickle;
@@ -30,6 +31,7 @@ import pyspark_cassandra.readers.KVRowsReaderFactory;
 import pyspark_cassandra.readers.KVTuplesRowReader;
 import pyspark_cassandra.readers.LWRowReader;
 import pyspark_cassandra.readers.RowReader;
+import pyspark_cassandra.readers.PairReader;
 import pyspark_cassandra.readers.TupleRowReader;
 import pyspark_cassandra.types.RawRow;
 
@@ -40,8 +42,11 @@ import com.datastax.spark.connector.japi.DStreamJavaFunctions;
 import com.datastax.spark.connector.japi.RDDAndDStreamCommonJavaFunctions;
 import com.datastax.spark.connector.japi.RDDJavaFunctions;
 import com.datastax.spark.connector.japi.rdd.CassandraJavaRDD;
+import com.datastax.spark.connector.japi.rdd.CassandraJavaPairRDD;
 import com.datastax.spark.connector.rdd.ReadConf;
 import com.datastax.spark.connector.rdd.reader.RowReaderFactory;
+import com.datastax.spark.connector.PartitionKeyColumns$;
+import com.datastax.spark.connector.ColumnSelector;
 
 /**
  * Main access point for Cassandra related features from PySpark. Many of the features in pyspark_cassandra are mainly
@@ -97,6 +102,33 @@ public class PythonHelper {
 		}
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public JavaRDD<byte[]> parseRows(CassandraJavaPairRDD rdd, Integer rowFormat) {
+		return rdd
+				.map(new PairReader())
+				.map(rowParser(rowFormat))
+				.mapPartitions(new BatchPickle(), true);
+	}
+
+	public CassandraJavaPairRDD<Object, RawRow> joinWithCassandraTable(JavaRDD<byte[]> rdd, String keyspace, String table, String[] columns) {
+		RDDJavaFunctions<Object> crdd = CassandraJavaUtil.javaFunctions(rdd.flatMap(new BatchUnpickle()));
+
+		ColumnSelector cols = CassandraJavaUtil.allColumns;
+		if (columns != null && columns.length > 0) {
+			cols = CassandraJavaUtil.someColumns(columns);
+		}
+
+		return crdd
+			.joinWithCassandraTable(
+				keyspace,
+				table,
+				cols,
+				PartitionKeyColumns$.MODULE$,
+				new DeferringRowReaderFactory(),
+				rowWriterFactory(null)
+				);
+	}
+
 	public void saveToCassandra(JavaRDD<byte[]> rdd, String keyspace, String table, String[] columns,
 			Map<String, Object> writeConf, Integer rowFormat) {
 		RDDJavaFunctions<Object> crdd = CassandraJavaUtil.javaFunctions(rdd.flatMap(new BatchUnpickle()));
@@ -149,8 +181,9 @@ public class PythonHelper {
 
 		// Defaults to false if not set. This hides some compatibility issues with default settings
 		boolean taskMetricsEnabled = (boolean) get(values, "metrics_enabled", false);
-		Object x = (Integer) 0;
-		scala.Option<Object> split = scala.Option.apply(x);
+		Object split_java = (Integer) get(values, "split", null);
+		scala.Option<Object> split = scala.Option.apply(split_java);
+
 		return new ReadConf(split, splitSize, fetchSize, consistencyLevel, taskMetricsEnabled);
 	}
 
