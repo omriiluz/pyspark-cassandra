@@ -40,8 +40,13 @@ import com.datastax.spark.connector.japi.DStreamJavaFunctions;
 import com.datastax.spark.connector.japi.RDDAndDStreamCommonJavaFunctions;
 import com.datastax.spark.connector.japi.RDDJavaFunctions;
 import com.datastax.spark.connector.japi.rdd.CassandraJavaRDD;
+import com.datastax.spark.connector.japi.rdd.CassandraJavaPairRDD;
 import com.datastax.spark.connector.rdd.ReadConf;
 import com.datastax.spark.connector.rdd.reader.RowReaderFactory;
+
+import com.datastax.spark.connector.PartitionKeyColumns$;
+
+
 
 /**
  * Main access point for Cassandra related features from PySpark. Many of the features in pyspark_cassandra are mainly
@@ -95,6 +100,16 @@ public class PythonHelper {
 		default:
 			throw new IllegalArgumentException();
 		}
+	}
+
+	public <T> CassandraJavaPairRDD<T, RawRow> joinWithCassandraTable(JavaRDD<byte[]> rdd, String keyspace, String table) {
+		return CassandraJavaUtil.javaFunctions(rdd)
+		.joinWithCassandraTable(
+			keyspace,
+			table,
+			CassandraJavaUtil.allColumns,
+			PartitionKeyColumns$.MODULE$
+			);
 	}
 
 	public void saveToCassandra(JavaRDD<byte[]> rdd, String keyspace, String table, String[] columns,
