@@ -149,8 +149,8 @@ public class PythonHelper {
 
 		// Defaults to false if not set. This hides some compatibility issues with default settings
 		boolean taskMetricsEnabled = (boolean) get(values, "metrics_enabled", false);
-		Object x = (Integer) 0;
-		scala.Option<Object> split = scala.Option.apply(x);
+		Object split_java = (Integer) get(values, "split", null);
+		scala.Option<Object> split = scala.Option.apply(split_java);
 		return new ReadConf(split, splitSize, fetchSize, consistencyLevel, taskMetricsEnabled);
 	}
 
